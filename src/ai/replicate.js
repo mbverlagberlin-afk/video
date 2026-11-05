@@ -12,8 +12,19 @@ function headers(extra = {}) {
   return { Authorization: `Bearer ${token}`, ...extra };
 }
 
+const HINTS = {
+  401: 'Replicate: Der API-Token ist ungültig. Bitte unter Einstellungen einen gültigen Token eintragen.',
+  402: 'Replicate: Kein Guthaben mehr. Bitte unter replicate.com/account/billing Guthaben aufladen und danach ein paar Minuten warten.',
+  404: 'Replicate: Das eingestellte Modell wurde nicht gefunden. Bitte den Modellnamen unter Einstellungen prüfen.',
+  422: 'Replicate: Das Modell hat die Eingaben abgelehnt. Bitte den Prompt oder den Modellnamen prüfen.',
+  429: 'Replicate: Zu viele Anfragen auf einmal. Bitte kurz warten und erneut versuchen.',
+};
+
 async function check(res) {
-  if (!res.ok) throw new Error(`Replicate ${res.status}: ${(await res.text()).slice(0, 500)}`);
+  if (!res.ok) {
+    const body = (await res.text()).slice(0, 300);
+    throw new Error(HINTS[res.status] ? `${HINTS[res.status]} (Code ${res.status})` : `Replicate ${res.status}: ${body}`);
+  }
   return res.json();
 }
 

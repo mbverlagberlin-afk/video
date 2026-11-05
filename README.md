@@ -59,13 +59,29 @@ Die Modellnamen lassen sich in den Einstellungen frei ändern. Bei einem Videomo
 
 > **Kosten:** Videomodelle sind der größte Kostenfaktor, meist einige Cent bis über einen Euro pro Clip. Prüfe deshalb erst Bilder und Storyboard und generiere Clips danach gezielt. Der audio-reaktive Musikvideo-Modus braucht nur ein Bild pro Keyframe.
 
+## Anmeldung & Benutzer
+
+Die App ist nur nach Anmeldung nutzbar. Beim allerersten Aufruf legst du das **Administrator-Konto** an. Mach das direkt nach der Installation, denn bis dahin könnte jeder, der die Adresse kennt, dieses Konto anlegen. Danach gilt:
+- Der Administrator legt unter **Einstellungen → Benutzer** weitere Konten an, setzt Passwörter zurück und verwaltet die API-Schlüssel.
+- Jeder Benutzer sieht nur seine eigenen Projekte, der Administrator sieht alle.
+- Passwörter werden mit scrypt gehasht, Sitzungen laufen über sichere HttpOnly-Cookies (30 Tage). Nach 10 Fehlversuchen innerhalb von 15 Minuten wird die Anmeldung gesperrt.
+- Statt der Ersteinrichtung im Browser kannst du das Admin-Konto auch über `ADMIN_EMAIL` und `ADMIN_PASSWORD` anlegen lassen.
+
+## Online stellen (z. B. auf studio.onemultimedia.de)
+
+WordPress.com kann die App nicht selbst ausführen, sie braucht einen eigenen Server mit ffmpeg. Am einfachsten geht es mit **Render.com**, die Vorlage `render.yaml` liegt bei:
+1. Bei render.com mit dem GitHub-Konto anmelden und **New → Blueprint** wählen.
+2. Dieses Repository und den Branch auswählen. Render baut den Container aus dem `Dockerfile`, inklusive dauerhaftem Speicher (10 GB, Tarif „Starter“).
+3. Die angezeigte `…onrender.com`-Adresse öffnen und sofort das Administrator-Konto anlegen.
+4. In Render unter **Settings → Custom Domains** die Adresse `studio.onemultimedia.de` eintragen und bei WordPress.com unter Domains → DNS einen **CNAME**-Eintrag `studio` auf die `…onrender.com`-Adresse setzen. HTTPS richtet Render automatisch ein.
+
 ## Weitere Optionen
 
 | Variable | Bedeutung |
 |---|---|
 | `PORT` | Port des Webservers (Standard: 3000) |
 | `DATA_DIR` | Ablageort für Projekte und Einstellungen (Standard: `./data`) |
-| `APP_PASSWORD` | Aktiviert einen Passwortschutz (HTTP Basic Auth), wichtig, wenn die App im Internet erreichbar ist |
+| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Legt beim Start ein Admin-Konto an, falls noch keines existiert |
 
 Das Ausgabeformat stellst du unter Einstellungen ein, z. B. 1280×720 (16:9), 1080×1920 (Hochformat für Reels/TikTok) oder 1080×1080.
 
@@ -76,6 +92,7 @@ server.js                 Webserver und REST-API
 src/config.js             Einstellungen (data/settings.json und Umgebungsvariablen)
 src/store.js              Projektablage (data/projects/<id>/)
 src/jobs.js               Hintergrundaufträge mit Fortschritt
+src/auth.js               Benutzerkonten, Anmeldung, Sitzungen
 src/ai/claude.js          Claude-Anbindung (strukturierte JSON-Antworten)
 src/ai/screenplay.js      Drehbuch-Analyse (Claude und regelbasierter Offline-Parser)
 src/ai/image.js           Bildgenerierung (Replicate / Demo)

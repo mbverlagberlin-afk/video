@@ -10,11 +10,13 @@
 <body>
   <header class="topbar">
     <a href="#/" class="brand"><span class="logo">▶</span> KI-Filmstudio</a>
-    <nav>
+    <nav id="nav" hidden>
       <a href="#/">Projekte</a>
-      <a href="#/einstellungen">Einstellungen</a>
+      <a href="#/einstellungen" id="nav-settings" hidden>Einstellungen</a>
+      <a href="#/konto">Mein Konto</a>
     </nav>
     <div id="status-pills" class="pills"></div>
+    <div id="userbox" class="row small" hidden><span id="username" class="muted"></span><button class="sm" id="logout">Abmelden</button></div>
   </header>
   <main id="app"></main>
   <div id="toast"></div>

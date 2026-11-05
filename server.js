@@ -10,29 +10,53 @@ import * as film from './src/pipeline/film.js';
 import * as mv from './src/pipeline/musicvideo.js';
 import { listVoices } from './src/ai/tts.js';
 import { parseScreenplayBasic } from './src/ai/screenplay.js';
+import * as auth from './src/auth.js';
 
 const app = express();
+app.set('trust proxy', 1); // hinter Render/Reverse-Proxy: echte IP und HTTPS erkennen
+app.disable('x-powered-by');
 app.use(express.json({ limit: '5mb' }));
+app.use((req, res, next) => { res.set({ 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'SAMEORIGIN', 'Referrer-Policy': 'same-origin' }); next(); });
+auth.seedAdminFromEnv();
 
-// Optionaler Passwortschutz (HTTP Basic Auth), wenn APP_PASSWORD gesetzt ist.
-if (process.env.APP_PASSWORD) {
-  app.use((req, res, next) => {
-    const [, b64] = (req.headers.authorization || '').split(' ');
-    const pass = b64 ? Buffer.from(b64, 'base64').toString().split(':').slice(1).join(':') : '';
-    if (pass === process.env.APP_PASSWORD) return next();
-    res.set('WWW-Authenticate', 'Basic realm="KI-Filmstudio"').status(401).send('Anmeldung erforderlich');
-  });
-}
+const wrap = (fn) => (req, res) => Promise.resolve().then(() => fn(req, res)).catch((e) => res.status(e.status || 400).json({ error: e.message }));
+
+// ---------- Anmeldung (ohne Login erreichbar) ----------
+app.get('/api/auth/me', (req, res) => res.json({ user: auth.currentUser(req), setupNeeded: !auth.hasUsers() }));
+app.post('/api/auth/login', wrap((req, res) => res.json({ user: auth.login(req, res, req.body.email, req.body.password) })));
+app.post('/api/auth/logout', (req, res) => { auth.logout(req, res); res.json({ ok: true }); });
+// Ersteinrichtung: Nur solange noch kein Konto existiert, wird das erste Konto als Administrator angelegt.
+app.post('/api/auth/setup', wrap((req, res) => {
+  if (auth.hasUsers()) throw new Error('Die Einrichtung ist bereits abgeschlossen.');
+  auth.createUser({ email: req.body.email, password: req.body.password, name: req.body.name, role: 'admin' });
+  res.json({ user: auth.login(req, res, req.body.email, req.body.password) });
+}));
 
 app.use(express.static('public'));
-app.use('/media', express.static(PROJECTS_DIR, { maxAge: 0 }));
 
-const wrap = (fn) => (req, res) => Promise.resolve(fn(req, res)).catch((e) => res.status(400).json({ error: e.message }));
+// Ab hier ist alles nur für angemeldete Benutzer.
+app.use('/api', auth.requireUser);
+const canAccess = (user, projectId) => { try { const p = getProject(projectId); return user.role === 'admin' || p.ownerId === user.id; } catch { return false; } };
+app.use('/media/:id', auth.requireUser, (req, res, next) => (canAccess(req.user, req.params.id) ? next() : res.status(404).end()));
+app.use('/media', express.static(PROJECTS_DIR, { maxAge: 0 }));
+app.use('/api/projects/:id', (req, res, next) => (canAccess(req.user, req.params.id) ? next() : res.status(404).json({ error: 'Projekt nicht gefunden' })));
+
+// ---------- Konto & Benutzerverwaltung ----------
+app.put('/api/auth/password', wrap((req, res) => {
+  if (!auth.verifyPassword(req.user.id, String(req.body.current || ''))) throw new Error('Das aktuelle Passwort ist falsch.');
+  auth.setPassword(req.user.id, req.body.password);
+  auth.login(req, res, req.user.email, req.body.password); // neue Sitzung nach Passwortwechsel
+  res.json({ ok: true });
+}));
+app.get('/api/users', auth.requireAdmin, (req, res) => res.json(auth.listUsers().map(({ id, email, name, role, createdAt }) => ({ id, email, name, role, createdAt }))));
+app.post('/api/users', auth.requireAdmin, wrap((req, res) => res.json(auth.createUser(req.body))));
+app.put('/api/users/:uid/password', auth.requireAdmin, wrap((req, res) => { auth.setPassword(req.params.uid, req.body.password); res.json({ ok: true }); }));
+app.delete('/api/users/:uid', auth.requireAdmin, wrap((req, res) => { if (req.params.uid === req.user.id) throw new Error('Du kannst dich nicht selbst löschen.'); auth.deleteUser(req.params.uid); res.json({ ok: true }); }));
 const upload = multer({ dest: path.join(PROJECTS_DIR, '..', 'uploads'), limits: { fileSize: 500 * 1024 * 1024 } });
 
 // ---------- Einstellungen ----------
-app.get('/api/settings', (req, res) => res.json(publicSettings()));
-app.put('/api/settings', wrap((req, res) => res.json(saveSettings(req.body))));
+app.get('/api/settings', auth.requireAdmin, (req, res) => res.json(publicSettings()));
+app.put('/api/settings', auth.requireAdmin, wrap((req, res) => res.json(saveSettings(req.body))));
 app.get('/api/voices', wrap(async (req, res) => res.json(await listVoices())));
 app.get('/api/status', (req, res) => {
   const s = getSettings();
@@ -41,11 +65,11 @@ app.get('/api/status', (req, res) => {
 });
 
 // ---------- Projekte ----------
-app.get('/api/projects', (req, res) => res.json(listProjects()));
+app.get('/api/projects', (req, res) => res.json(listProjects(req.user.role === 'admin' ? null : req.user.id)));
 app.post('/api/projects', wrap((req, res) => {
   const { type, title } = req.body;
   if (!['film', 'musikvideo'].includes(type)) throw new Error('Unbekannter Projekttyp');
-  res.json(createProject(type, title));
+  res.json(createProject(type, title, req.user.id));
 }));
 app.get('/api/projects/:id', wrap((req, res) => res.json({ ...getProject(req.params.id), job: getProjectJob(req.params.id) })));
 app.put('/api/projects/:id', wrap((req, res) => {
@@ -108,13 +132,15 @@ app.post('/api/projects/:id/run/:action', wrap((req, res) => {
   const job = startJob(p.id, req.params.action, (ctx) => fn(p.id, ctx, req.body || {}));
   res.json(job);
 }));
-app.get('/api/jobs/:id', (req, res) => { const j = getJob(req.params.id); j ? res.json(j) : res.status(404).json({ error: 'Nicht gefunden' }); });
-app.post('/api/jobs/:id/cancel', (req, res) => res.json(cancelJob(req.params.id) || {}));
+app.get('/api/jobs/:jid', (req, res) => { const j = getJob(req.params.jid); j && canAccess(req.user, j.projectId) ? res.json(j) : res.status(404).json({ error: 'Nicht gefunden' }); });
+app.post('/api/jobs/:jid/cancel', (req, res) => { const j = getJob(req.params.jid); if (!j || !canAccess(req.user, j.projectId)) return res.status(404).json({ error: 'Nicht gefunden' }); res.json(cancelJob(j.id)); });
 
 // Schnellvorschau des regelbasierten Parsers (ohne KI)
 app.post('/api/parse-preview', wrap((req, res) => res.json(parseScreenplayBasic(req.body.text || ''))));
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'Nicht gefunden' }));
+// Fehler nie mit internen Details an den Browser geben
+app.use((err, req, res, next) => { console.error(err); res.status(err.status || 500).json({ error: err.expose ? err.message : 'Interner Fehler' }); });
 
 const PORT = Number(process.env.PORT) || 3000;
 app.listen(PORT, () => console.log(`KI-Filmstudio läuft auf http://localhost:${PORT}`));

@@ -10,12 +10,12 @@ export const projectDir = (id) => {
 };
 const projectFile = (id) => path.join(projectDir(id), 'project.json');
 
-export function listProjects() {
+export function listProjects(ownerId = null) {
   return fs.readdirSync(PROJECTS_DIR, { withFileTypes: true })
     .filter((d) => d.isDirectory())
     .map((d) => { try { return getProject(d.name); } catch { return null; } })
-    .filter(Boolean)
-    .map(({ id, type, title, createdAt, updatedAt, output, status }) => ({ id, type, title, createdAt, updatedAt, output, status }))
+    .filter((p) => p && (!ownerId || p.ownerId === ownerId))
+    .map(({ id, type, title, createdAt, updatedAt, output, status, ownerId: o }) => ({ id, type, title, createdAt, updatedAt, output, status, ownerId: o }))
     .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
 }
 
@@ -23,10 +23,10 @@ export function getProject(id) {
   return JSON.parse(fs.readFileSync(projectFile(id), 'utf8'));
 }
 
-export function createProject(type, title) {
+export function createProject(type, title, ownerId = null) {
   const id = crypto.randomUUID().slice(0, 8) + '-' + Date.now().toString(36);
   const now = new Date().toISOString();
-  const base = { id, type, title: title || (type === 'film' ? 'Neuer Film' : 'Neues Musikvideo'), createdAt: now, updatedAt: now, status: 'entwurf', output: null };
+  const base = { id, ownerId, type, title: title || (type === 'film' ? 'Neuer Film' : 'Neues Musikvideo'), createdAt: now, updatedAt: now, status: 'entwurf', output: null };
   const project = type === 'film'
     ? { ...base, screenplay: '', style: 'filmisch, 35mm, natürliches Licht, hohe Detailtiefe', analysis: null, subtitles: true, musicFile: null, musicVolume: 0.25 }
     : { ...base, audioFile: null, analysis: null, theme: '', lyrics: '', style: 'surreal, leuchtende Farben, traumartig, hochdetailliert', keyframes: [], mode: 'reaktiv',

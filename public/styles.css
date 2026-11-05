@@ -72,3 +72,11 @@ video.output { width: 100%; border-radius: 10px; background: #000; }
 .stat { display: inline-flex; flex-direction: column; padding: 8px 14px; background: var(--panel2); border-radius: 9px; border: 1px solid var(--line); }
 .stat b { font-size: 1.2rem; } .stat span { font-size: 12px; color: var(--muted); }
 .hint { background: #1b1e29; border: 1px dashed #343a4d; padding: 10px 12px; border-radius: 9px; font-size: 13px; color: var(--muted); }
+
+.auth-box { max-width: 400px; margin: 8vh auto; }
+.auth-box h1 { text-align: center; }
+.auth-box button.primary { width: 100%; justify-content: center; margin-top: 16px; padding: 11px; }
+table.users { width: 100%; border-collapse: collapse; font-size: 14px; }
+table.users td, table.users th { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: left; }
+@media (max-width: 600px) { .topbar { gap: 10px; padding: 10px 14px; } .pills { display: none; } }
+[hidden] { display: none !important; }

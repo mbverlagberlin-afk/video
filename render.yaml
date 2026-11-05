@@ -1,0 +1,15 @@
+# Blueprint für Render.com: Dienst mit dauerhaftem Speicher für Projekte, Konten und Einstellungen.
+services:
+  - type: web
+    name: ki-filmstudio
+    runtime: docker
+    plan: starter        # der kostenlose Tarif hat keinen dauerhaften Speicher
+    region: frankfurt
+    healthCheckPath: /api/auth/me
+    envVars:
+      - key: DATA_DIR
+        value: /data
+    disk:
+      name: daten
+      mountPath: /data
+      sizeGB: 10

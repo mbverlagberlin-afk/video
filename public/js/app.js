@@ -4,14 +4,17 @@ import { renderMusicVideo } from './musicvideo.js';
 
 const app = $('#app');
 let cleanup = null;
+let me = null;
 
 async function route() {
   cleanup?.(); cleanup = null;
+  if (!me) return showAuth();
   const [, view, id] = location.hash.replace(/^#/, '').split('/');
   try {
     if (view === 'film' && id) cleanup = await renderFilm(app, id);
     else if (view === 'mv' && id) cleanup = await renderMusicVideo(app, id);
-    else if (view === 'einstellungen') await renderSettings();
+    else if (view === 'einstellungen' && me.role === 'admin') await renderSettings();
+    else if (view === 'konto') await renderAccount();
     else await renderDashboard();
   } catch (e) { app.innerHTML = `<div class="panel">Fehler: ${esc(e.message)}</div>`; }
   refreshStatus();
@@ -100,7 +103,9 @@ async function renderSettings() {
         </div>
       </div>
       <button class="primary" type="submit">Speichern</button>
-    </form>`;
+    </form>
+    <div class="panel" id="usersbox" style="margin-top:18px"></div>`;
+  renderUsers($('#usersbox'));
   $('#settings').addEventListener('submit', async (e) => {
     e.preventDefault();
     const body = Object.fromEntries(new FormData(e.target));
@@ -108,5 +113,91 @@ async function renderSettings() {
   });
 }
 
+// ---------- Anmeldung ----------
+function setUser(u) {
+  me = u;
+  $('#nav').hidden = !u; $('#userbox').hidden = !u; $('#status-pills').hidden = !u;
+  $('#nav-settings').hidden = u?.role !== 'admin';
+  if (u) $('#username').textContent = u.name + (u.role === 'admin' ? ' (Admin)' : '');
+}
+
+async function showAuth() {
+  const { user, setupNeeded } = await api('/auth/me');
+  if (user) { setUser(user); return route(); }
+  setUser(null);
+  app.innerHTML = `
+    <div class="panel auth-box">
+      <h1>${setupNeeded ? 'Willkommen!' : 'Anmelden'}</h1>
+      <p class="muted small" style="text-align:center">${setupNeeded ? 'Lege jetzt dein Administrator-Konto an. Damit verwaltest du später alle Benutzer und Einstellungen.' : 'Bitte melde dich an, um das KI-Filmstudio zu nutzen.'}</p>
+      <form id="authform">
+        ${setupNeeded ? '<label>Dein Name</label><input name="name" required autocomplete="name">' : ''}
+        <label>E-Mail</label><input name="email" type="email" required autocomplete="email">
+        <label>Passwort${setupNeeded ? ' (mindestens 8 Zeichen)' : ''}</label><input name="password" type="password" required minlength="${setupNeeded ? 8 : 1}" autocomplete="${setupNeeded ? 'new-password' : 'current-password'}">
+        ${setupNeeded ? '<label>Passwort wiederholen</label><input name="password2" type="password" required autocomplete="new-password">' : ''}
+        <button class="primary" type="submit">${setupNeeded ? 'Konto anlegen' : 'Anmelden'}</button>
+      </form>
+    </div>`;
+  $('#authform').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const body = Object.fromEntries(new FormData(e.target));
+    if (setupNeeded && body.password !== body.password2) return toast('Die Passwörter stimmen nicht überein.', true);
+    try {
+      const r = await api(setupNeeded ? '/auth/setup' : '/auth/login', { method: 'POST', body });
+      setUser(r.user); route();
+    } catch (err) { toast(err.message, true); }
+  });
+}
+
+$('#logout').addEventListener('click', async () => { await api('/auth/logout', { method: 'POST' }); setUser(null); location.hash = '#/'; showAuth(); });
+window.addEventListener('abgemeldet', () => { if (me) { setUser(null); toast('Bitte erneut anmelden.', true); showAuth(); } });
+
+async function renderAccount() {
+  app.innerHTML = `
+    <h1>Mein Konto</h1>
+    <div class="panel" style="max-width:480px">
+      <p><b>${esc(me.name)}</b><br><span class="muted">${esc(me.email)}</span></p>
+      <h2>Passwort ändern</h2>
+      <form id="pwform">
+        <label>Aktuelles Passwort</label><input name="current" type="password" required autocomplete="current-password">
+        <label>Neues Passwort (mindestens 8 Zeichen)</label><input name="password" type="password" minlength="8" required autocomplete="new-password">
+        <button class="primary" type="submit" style="margin-top:14px">Passwort speichern</button>
+      </form>
+    </div>`;
+  $('#pwform').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try { await api('/auth/password', { method: 'PUT', body: Object.fromEntries(new FormData(e.target)) }); toast('Passwort geändert'); e.target.reset(); } catch (err) { toast(err.message, true); }
+  });
+}
+
+async function renderUsers(box) {
+  const users = await api('/users');
+  box.innerHTML = `
+    <h2>Benutzer</h2>
+    <p class="small muted">Nur angemeldete Benutzer können das Studio nutzen. Jeder sieht nur seine eigenen Projekte; Administratoren sehen alle.</p>
+    <table class="users"><tr><th>Name</th><th>E-Mail</th><th>Rolle</th><th></th></tr>
+    ${users.map((u) => `<tr><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${u.role === 'admin' ? 'Admin' : 'Benutzer'}</td>
+      <td style="text-align:right"><button class="sm" data-pw="${u.id}">Passwort</button> ${u.id !== me.id ? `<button class="sm danger" data-udel="${u.id}">Löschen</button>` : ''}</td></tr>`).join('')}</table>
+    <h3 style="margin-top:18px">Neuen Benutzer anlegen</h3>
+    <form id="newuser" class="row">
+      <input name="name" placeholder="Name" style="flex:1;min-width:120px">
+      <input name="email" type="email" placeholder="E-Mail" required style="flex:1;min-width:160px">
+      <input name="password" type="text" placeholder="Startpasswort (8+ Zeichen)" minlength="8" required style="flex:1;min-width:160px">
+      <select name="role" style="width:auto"><option value="user">Benutzer</option><option value="admin">Admin</option></select>
+      <button type="submit">Anlegen</button>
+    </form>`;
+  $('#newuser', box).addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try { await api('/users', { method: 'POST', body: Object.fromEntries(new FormData(e.target)) }); toast('Benutzer angelegt'); renderUsers(box); } catch (err) { toast(err.message, true); }
+  });
+  box.querySelectorAll('[data-udel]').forEach((b) => b.addEventListener('click', async () => {
+    if (!confirm('Benutzer löschen? Seine Projekte bleiben erhalten und sind für Admins sichtbar.')) return;
+    try { await api('/users/' + b.dataset.udel, { method: 'DELETE' }); renderUsers(box); } catch (err) { toast(err.message, true); }
+  }));
+  box.querySelectorAll('[data-pw]').forEach((b) => b.addEventListener('click', async () => {
+    const pw = prompt('Neues Passwort (mindestens 8 Zeichen):'); if (!pw) return;
+    try { await api(`/users/${b.dataset.pw}/password`, { method: 'PUT', body: { password: pw } }); toast('Passwort gesetzt'); } catch (err) { toast(err.message, true); }
+  }));
+}
+
 window.addEventListener('hashchange', route);
-route();
+showAuth();

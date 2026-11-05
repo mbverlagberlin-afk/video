@@ -8,6 +8,7 @@ export async function api(path, opts = {}) {
   else if (opts.body !== undefined) { init.body = JSON.stringify(opts.body); init.headers['Content-Type'] = 'application/json'; }
   const res = await fetch('/api' + path, init);
   const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && !path.startsWith('/auth/')) { window.dispatchEvent(new Event('abgemeldet')); }
   if (!res.ok) throw new Error(data.error || res.statusText);
   return data;
 }

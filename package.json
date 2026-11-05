@@ -1,0 +1,22 @@
+{
+  "name": "ki-filmstudio",
+  "version": "1.0.0",
+  "description": "Webbasierte KI-Anwendung: Filme aus Drehbüchern und audio-reaktive Musikvideos erstellen",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.5.0",
+    "express": "^5.1.0",
+    "multer": "^2.0.2",
+    "sharp": "^0.34.4"
+  }
+}

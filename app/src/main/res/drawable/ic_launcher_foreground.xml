@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Stilisierter Besen mit Funkeln – 108dp Adaptive-Icon-Fläche, Inhalt im sicheren 66dp-Bereich -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Stiel -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M66,26 L70,30 L54,46 L50,42 Z" />
+    <!-- Besenkopf -->
+    <path
+        android:fillColor="#2EC4B6"
+        android:pathData="M48,40 L58,50 L52,56 Q44,72 30,78 Q34,64 42,46 Z" />
+    <!-- Borsten-Linien -->
+    <path
+        android:strokeColor="#0F2A44"
+        android:strokeWidth="2"
+        android:pathData="M46,52 L38,70 M51,54 L43,73" />
+    <!-- Funkeln -->
+    <path
+        android:fillColor="#FFD166"
+        android:pathData="M72,58 L74,64 L80,66 L74,68 L72,74 L70,68 L64,66 L70,64 Z" />
+    <path
+        android:fillColor="#FFD166"
+        android:pathData="M62,74 L63,77 L66,78 L63,79 L62,82 L61,79 L58,78 L61,77 Z" />
+</vector>

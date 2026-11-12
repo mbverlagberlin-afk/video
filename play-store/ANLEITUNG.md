@@ -43,7 +43,7 @@ hochladen musst, liegt in diesem Ordner `play-store/`.
 
 | Punkt | Antwort |
 |---|---|
-| Datenschutzerklärung | Öffentliche URL von `datenschutz.html` (vorher die Platzhalter in [eckigen Klammern] ausfüllen!) |
+| Datenschutzerklärung | `https://oneberlinmedia.de/software/oneclean-datenschutz/` |
 | App-Zugriff | Alle Funktionen ohne Anmeldung verfügbar |
 | Anzeigen | Nein, die App enthält keine Werbung |
 | Einstufung des Inhalts | Fragebogen: Kategorie „Dienstprogramm/Tools“, alle Fragen zu Gewalt, Sexualität usw. mit **Nein** |

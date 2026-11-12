@@ -8,27 +8,24 @@ plugins {
 val appVersionName = (project.findProperty("appVersionName") as String?) ?: "1.0.0"
 val appVersionCode = (project.findProperty("appVersionCode") as String?)?.toInt() ?: 1
 
-// GitHub-Repo, aus dessen Releases sich die App selbst aktualisiert
-val updateRepo = (project.findProperty("updateRepo") as String?) ?: "mbverlagberlin-afk/oneclean"
-
+// Upload-Schlüssel für Google Play (wird in GitHub Actions aus den Secrets gesetzt)
 val releaseKeystore: String? = System.getenv("ONECLEAN_KEYSTORE")
 
 android {
     namespace = "de.onemultimedia.oneclean"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "de.onemultimedia.oneclean"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = appVersionCode
         versionName = appVersionName
-        buildConfigField("String", "UPDATE_REPO", "\"$updateRepo\"")
     }
 
     signingConfigs {
-        create("release") {
-            if (releaseKeystore != null) {
+        if (releaseKeystore != null) {
+            create("release") {
                 storeFile = file(releaseKeystore)
                 storePassword = System.getenv("ONECLEAN_KEYSTORE_PASSWORD")
                 keyAlias = System.getenv("ONECLEAN_KEY_ALIAS")
@@ -41,8 +38,13 @@ android {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = if (releaseKeystore != null) signingConfigs.getByName("release")
-            else signingConfigs.getByName("debug")
+            // Ohne Schlüssel entsteht ein unsigniertes App Bundle, das nachträglich signiert werden kann
+            signingConfig = if (releaseKeystore != null) signingConfigs.getByName("release") else null
+        }
+        debug {
+            // Test-Version kann parallel zur Play-Store-Version installiert werden
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-test"
         }
     }
 
@@ -70,4 +72,6 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-core")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    // Google Play Billing für „OneClean Pro“
+    implementation("com.android.billingclient:billing:8.0.0")
 }

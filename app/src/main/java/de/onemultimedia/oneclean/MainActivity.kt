@@ -2,6 +2,7 @@ package de.onemultimedia.oneclean
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
@@ -13,35 +14,39 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
+import de.onemultimedia.oneclean.billing.BillingManager
 import de.onemultimedia.oneclean.ui.AppsScreen
 import de.onemultimedia.oneclean.ui.CalendarScreen
 import de.onemultimedia.oneclean.ui.HomeScreen
+import de.onemultimedia.oneclean.ui.LocalBilling
+import de.onemultimedia.oneclean.ui.ProScreen
 import de.onemultimedia.oneclean.ui.StorageScreen
 import de.onemultimedia.oneclean.ui.UpdatesScreen
 import de.onemultimedia.oneclean.ui.theme.OneCleanTheme
-import de.onemultimedia.oneclean.update.UpdateManager
 
 private data class TabItem(val label: String, val icon: ImageVector)
 
@@ -53,42 +58,66 @@ private val tabs = listOf(
     TabItem("Updates", Icons.Filled.Refresh)
 )
 
+/** Index der Pro-Seite (nicht in der unteren Leiste, sondern über den Stern oben). */
+const val PRO_TAB = 5
+
 class MainActivity : ComponentActivity() {
+
+    private lateinit var billing: BillingManager
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        billing = BillingManager(this)
+        billing.start()
         enableEdgeToEdge()
         setContent {
-            OneCleanTheme { OneCleanApp() }
+            OneCleanTheme {
+                CompositionLocalProvider(LocalBilling provides billing) { OneCleanApp() }
+            }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // z. B. ausstehende Zahlungen, die inzwischen bestätigt wurden
+        billing.refresh()
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun OneCleanApp() {
-    val context = LocalContext.current
+    val billing = LocalBilling.current
     var tab by rememberSaveable { mutableIntStateOf(0) }
-    var updateVersion by remember { mutableStateOf<String?>(null) }
+    val snackbar = remember { SnackbarHostState() }
+    val billingMessage by billing.message.collectAsState()
 
-    // Beim Start still nach einer neuen OneClean-Version suchen
-    LaunchedEffect(Unit) {
-        val updater = UpdateManager(context)
-        val latest = runCatching { updater.fetchLatest() }.getOrNull()
-        if (latest != null && latest.apkUrl != null && updater.isNewer(latest.version)) {
-            updateVersion = latest.version
+    LaunchedEffect(billingMessage) {
+        billingMessage?.let {
+            snackbar.showSnackbar(it)
+            billing.clearMessage()
         }
     }
+
+    BackHandler(enabled = tab != 0) { tab = 0 }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("OneClean") },
+                actions = {
+                    IconButton(onClick = { tab = PRO_TAB }) {
+                        Icon(Icons.Filled.Star, contentDescription = "OneClean Pro")
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    actionIconContentColor = MaterialTheme.colorScheme.tertiary
                 )
             )
         },
+        snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
             NavigationBar {
                 tabs.forEachIndexed { index, item ->
@@ -103,25 +132,15 @@ private fun OneCleanApp() {
         }
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
+            val openPro = { tab = PRO_TAB }
             when (tab) {
                 0 -> HomeScreen(onOpen = { tab = it })
-                1 -> CalendarScreen()
-                2 -> StorageScreen()
-                3 -> AppsScreen()
-                else -> UpdatesScreen()
+                1 -> CalendarScreen(onOpenPro = openPro)
+                2 -> StorageScreen(onOpenPro = openPro)
+                3 -> AppsScreen(onOpenPro = openPro)
+                4 -> UpdatesScreen()
+                else -> ProScreen()
             }
         }
-    }
-
-    updateVersion?.let { v ->
-        AlertDialog(
-            onDismissRequest = { updateVersion = null },
-            title = { Text("Update verfügbar") },
-            text = { Text("OneClean $v ist erschienen. Jetzt aktualisieren?") },
-            confirmButton = {
-                TextButton(onClick = { updateVersion = null; tab = 4 }) { Text("Zum Update") }
-            },
-            dismissButton = { TextButton(onClick = { updateVersion = null }) { Text("Später") } }
-        )
     }
 }

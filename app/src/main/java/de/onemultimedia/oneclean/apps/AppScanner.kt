@@ -37,15 +37,23 @@ class AppScanner(private val context: Context) {
         return mode == AppOpsManager.MODE_ALLOWED
     }
 
-    /** Alle vom Nutzer installierten Apps (ohne OneClean selbst). */
+    /**
+     * Alle vom Nutzer installierten Apps mit Startsymbol (ohne OneClean selbst).
+     * Über <queries> im Manifest sichtbar – ohne die eingeschränkte Berechtigung QUERY_ALL_PACKAGES.
+     */
     fun userApps(): List<AppEntry> {
         val lastUsedMap = lastUsedTimes()
         val stats = context.getSystemService(Context.STORAGE_STATS_SERVICE) as StorageStatsManager
         val user = Process.myUserHandle()
 
+        val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
         @Suppress("DEPRECATION")
-        val packages = pm.getInstalledPackages(0)
-        return packages.mapNotNull { pkg ->
+        val packageNames = pm.queryIntentActivities(launcher, 0)
+            .map { it.activityInfo.packageName }
+            .distinct()
+        return packageNames.mapNotNull { name ->
+            @Suppress("DEPRECATION")
+            val pkg = runCatching { pm.getPackageInfo(name, 0) }.getOrNull() ?: return@mapNotNull null
             val ai = pkg.applicationInfo ?: return@mapNotNull null
             val isSystem = ai.flags and ApplicationInfo.FLAG_SYSTEM != 0 &&
                 ai.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP == 0

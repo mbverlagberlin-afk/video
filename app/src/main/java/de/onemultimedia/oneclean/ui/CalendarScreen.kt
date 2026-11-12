@@ -33,12 +33,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import de.onemultimedia.oneclean.calendar.CalEvent
 import de.onemultimedia.oneclean.calendar.CalendarCleaner
+import de.onemultimedia.oneclean.billing.FreeLimits
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
-fun CalendarScreen() {
+fun CalendarScreen(onOpenPro: () -> Unit) {
     val context = LocalContext.current
     val cleaner = remember { CalendarCleaner(context) }
     val scope = rememberCoroutineScope()
@@ -68,6 +69,8 @@ fun CalendarScreen() {
     var selected by remember { mutableStateOf<Set<Long>>(emptySet()) }
     var message by remember { mutableStateOf<String?>(null) }
     var confirm by remember { mutableStateOf(false) }
+    var limitDialog by remember { mutableStateOf(false) }
+    val pro = isPro()
 
     fun scan() {
         scope.launch {
@@ -156,10 +159,27 @@ fun CalendarScreen() {
         }
 
         if (selected.isNotEmpty()) {
-            OutlinedButton(onClick = { confirm = true }, modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = {
+                if (pro || selected.size <= FreeLimits.DELETE_PER_ACTION) confirm = true else limitDialog = true
+            }, modifier = Modifier.fillMaxWidth()) {
                 Text("${selected.size} Termine löschen")
             }
         }
+    }
+
+    if (limitDialog) {
+        ProLimitDialog(
+            text = "Kostenlos kannst du bis zu ${FreeLimits.DELETE_PER_ACTION} Termine auf einmal löschen. " +
+                "Mit OneClean Pro löschst du alle ${selected.size} in einem Rutsch.",
+            onOpenPro = onOpenPro,
+            onDismiss = { limitDialog = false },
+            freeLabel = "Nur ${FreeLimits.DELETE_PER_ACTION} löschen",
+            onFree = {
+                selected = candidates.map { it.id }.filter { it in selected }
+                    .take(FreeLimits.DELETE_PER_ACTION).toSet()
+                confirm = true
+            }
+        )
     }
 
     if (confirm) {

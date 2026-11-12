@@ -25,7 +25,7 @@ jobs:
 
       - uses: android-actions/setup-android@v3
         with:
-          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
 
       - uses: gradle/actions/setup-gradle@v4
 
@@ -34,12 +34,12 @@ jobs:
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             VERSION="${GITHUB_REF_NAME#v}"
           else
-            VERSION="0.0.${GITHUB_RUN_NUMBER}-dev"
+            VERSION="1.0.0"
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "Version: $VERSION"
+          echo "Version: $VERSION (Code $GITHUB_RUN_NUMBER)"
 
-      - name: Signatur-Schlüssel einrichten
+      - name: Upload-Schlüssel einrichten
         if: env.KEYSTORE_BASE64 != ''
         run: |
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/oneclean.jks"
@@ -48,28 +48,39 @@ jobs:
           echo "ONECLEAN_KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> "$GITHUB_ENV"
           echo "ONECLEAN_KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> "$GITHUB_ENV"
 
-      - name: APK bauen
+      - name: App Bundle (Play Store) und Test-APK bauen
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon --stacktrace \
+          ./gradlew bundleRelease assembleDebug --no-daemon --stacktrace \
             -PappVersionName="$VERSION" \
-            -PappVersionCode="$GITHUB_RUN_NUMBER" \
-            -PupdateRepo="$GITHUB_REPOSITORY"
+            -PappVersionCode="$GITHUB_RUN_NUMBER"
           mkdir -p dist
-          cp app/build/outputs/apk/release/*.apk "dist/OneClean-$VERSION.apk"
+          if [ -n "$ONECLEAN_KEYSTORE" ]; then SUFFIX=""; else SUFFIX="-unsigniert"; fi
+          cp app/build/outputs/bundle/release/*.aab "dist/OneClean-$VERSION-$GITHUB_RUN_NUMBER$SUFFIX.aab"
+          cp app/build/outputs/apk/debug/*.apk "dist/OneClean-$VERSION-test.apk"
           cp tools/oneclean_multi.py dist/
 
       - uses: actions/upload-artifact@v4
         with:
-          name: OneClean-${{ env.VERSION }}
+          name: OneClean-${{ env.VERSION }}-${{ github.run_number }}
           path: dist/
+
+      # Legt das Ergebnis zusätzlich im Branch "build-output" ab (nur die jeweils letzte Version)
+      - name: Build-Ergebnis in Branch build-output ablegen
+        if: github.event_name == 'push'
+        run: |
+          cd dist
+          git init -q -b build-output
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add .
+          git commit -q -m "Build $VERSION ($GITHUB_RUN_NUMBER) von $GITHUB_SHA"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" build-output
 
       - name: Release veröffentlichen
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           name: OneClean ${{ env.VERSION }}
-          files: |
-            dist/OneClean-${{ env.VERSION }}.apk
-            dist/oneclean_multi.py
+          files: dist/*
           generate_release_notes: true

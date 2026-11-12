@@ -46,7 +46,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
-fun AppsScreen() {
+fun AppsScreen(onOpenPro: () -> Unit) {
     val context = LocalContext.current
     val scanner = remember { AppScanner(context) }
     val scope = rememberCoroutineScope()
@@ -56,6 +56,7 @@ fun AppsScreen() {
     var loading by remember { mutableStateOf(false) }
     var apps by remember { mutableStateOf<List<AppEntry>>(emptyList()) }
     var scanned by remember { mutableStateOf(false) }
+    val pro = isPro()
 
     fun scan() {
         scope.launch {
@@ -108,8 +109,20 @@ fun AppsScreen() {
             )
         }
 
+        if (scanned && !loading && apps.isNotEmpty() && !pro) {
+            SectionCard("Mit Pro freischalten") {
+                Text(
+                    "OneClean hat ${apps.size} Apps gefunden, die du seit über $days Tagen nicht benutzt hast " +
+                        "(zusammen ${formatBytes(apps.sumOf { it.size })}). Mit OneClean Pro siehst du die Liste " +
+                        "und deinstallierst sie mit einem Tipp.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Button(onClick = onOpenPro) { Text("Pro ansehen") }
+            }
+        }
+
         LazyColumn(Modifier.weight(1f)) {
-            items(apps, key = { it.packageName }) { app ->
+            items(if (pro) apps else emptyList(), key = { it.packageName }) { app ->
                 val icon: ImageBitmap? = remember(app.packageName) {
                     runCatching {
                         context.packageManager.getApplicationIcon(app.packageName).toBitmap(96, 96).asImageBitmap()

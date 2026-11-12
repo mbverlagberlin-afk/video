@@ -1,7 +1,5 @@
 package de.onemultimedia.oneclean.ui
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,7 +16,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import de.onemultimedia.oneclean.BuildConfig
 import de.onemultimedia.oneclean.storage.StorageCleaner
 
 @Composable
@@ -57,28 +54,23 @@ fun HomeScreen(onOpen: (Int) -> Unit) {
         }
 
         SectionCard("Updates") {
-            Text("OneClean ${BuildConfig.VERSION_NAME} – Selbst-Update, System- und App-Updates prüfen.")
-            TextButton(onClick = { onOpen(4) }) { Text("Nach Updates suchen →") }
+            Text("System- und App-Updates prüfen und lange nicht aktualisierte Apps finden.")
+            TextButton(onClick = { onOpen(4) }) { Text("Updates prüfen →") }
         }
 
         SectionCard("Mehrere Geräte") {
             Text(
-                "• Kalender: Google-Kalender werden synchronisiert – einmal aufräumen genügt für alle Geräte.\n" +
-                    "• Alle Geräte auf einmal: Mit dem PC-Tool „OneClean Multi“ räumst du jedes per USB oder " +
-                    "WLAN verbundene Android-Gerät gleichzeitig auf (App-Caches leeren, Junk löschen, " +
-                    "OneClean installieren/aktualisieren).",
+                "Google-Kalender werden über dein Konto synchronisiert – einmal mit OneClean aufräumen genügt " +
+                    "für alle Geräte. OneClean Pro gilt auf allen Geräten mit deinem Google-Konto.",
                 style = MaterialTheme.typography.bodyMedium
             )
-            TextButton(onClick = {
-                context.startFirst(
-                    listOf(
-                        Intent(
-                            Intent.ACTION_VIEW,
-                            Uri.parse("https://github.com/${BuildConfig.UPDATE_REPO}#mehrere-ger%C3%A4te")
-                        )
-                    )
-                )
-            }) { Text("Anleitung öffnen →") }
+        }
+
+        if (!isPro()) {
+            SectionCard("OneClean Pro") {
+                Text("Unbegrenzt löschen und ungenutzte Apps finden – einmal kaufen, kein Abo.")
+                TextButton(onClick = { onOpen(de.onemultimedia.oneclean.PRO_TAB) }) { Text("Pro ansehen →") }
+            }
         }
 
         Text(
